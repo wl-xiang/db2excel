@@ -29,13 +29,11 @@ oracle2excel/
 │   └── logger.py
 ├── config/
 │   └── oracle_conn.json  # 连接与导出配置（部署时修改）
-├── docker/
-│   └── instantclient-*.zip  # build.sh 自动下载，也可手动放入
 ├── output/               # 导出的 xlsx 落盘目录（compose 挂载）
 ├── tests/test_export.py  # 无数据库的 mock 端到端自检
 ├── Dockerfile            # python:3.11-slim-bookworm + IC19 + libaio1
 ├── docker-compose.yml
-├── build.sh              # 一键: 下载IC → 构建镜像 → 验证 → save 打包 TGZ
+├── build.sh              # 一键: 构建镜像（构建期下载IC） → 验证 → save 打包 TGZ
 └── requirements.txt      # python-oracledb==2.4.3, openpyxl==3.1.5
 ```
 
@@ -47,10 +45,9 @@ oracle2excel/
 ```
 
 脚本会自动：
-1. 检查/下载 Instant Client 19.25 zip（约 75MB，国内网络慢时可手动下载放到 `docker/` 目录后 `SKIP_DOWNLOAD=1 ./build.sh`）;
-2. `docker build` 构建镜像;
-3. 容器内验证 Thick 模式能否真正加载 `libclntsh.so.19.1`;
-4. `docker save | gzip` 生成 `dist/oracle2excel_<版本>_linux_amd64.tar.gz` 并输出 SHA256。
+1. `docker build` 构建镜像（Dockerfile 在构建阶段在线下载 Instant Client 19.25，约 75MB；国内网络慢时可用 `--build-arg INSTANTCLIENT_URL=<镜像地址>` 或 `INSTANTCLIENT_URL=<镜像地址> ./build.sh` 指定其他下载源）;
+2. 容器内验证 Thick 模式能否真正加载 `libclntsh.so.19.1`;
+3. `docker save | gzip` 生成 `dist/oracle2excel_<版本>_linux_amd64.tar.gz` 并输出 SHA256。
 
 ## 部署（目标机器）
 
