@@ -2,14 +2,14 @@
 # =============================================================================
 # oracle2excel 镜像
 # - 基础镜像: python:3.11-slim-bookworm (Debian 12)
-# - 打包 Oracle Instant Client 19 (Basic)，供 python-oracledb Thick 模式连接 Oracle 11g
+# - 构建时在线下载并打包 Oracle Instant Client 19 (Basic)，供 python-oracledb Thick 模式连接 Oracle 11g
 # - 系统依赖: libaio1（Instant Client 必需）
 # - 环境变量: ORACLE_HOME / LD_LIBRARY_PATH / PATH / TNS_ADMIN / NLS_LANG
 # =============================================================================
 FROM python:3.11-slim-bookworm
 
-ARG INSTANTCLIENT_ZIP=instantclient-basic-linux.x64-19.25.0.0.0dbru.zip
 ARG INSTANTCLIENT_DIR=instantclient_19_25
+ARG INSTANTCLIENT_URL=https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-basic-linux.x64-19.25.0.0.0dbru.zip
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
@@ -19,19 +19,20 @@ ENV LANG=C.UTF-8 \
 # 1. 系统库: libaio1 为 Instant Client 运行所必需; tzdata 支持 TZ=Asia/Shanghai
 # ---------------------------------------------------------------------------
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libaio1 tzdata \
+    && apt-get install -y --no-install-recommends libaio1 tzdata ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
-# 2. 解压 Oracle Instant Client 19 到 /opt/oracle（用 Python zipfile，免装 unzip）
+# 2. 构建时在线下载并解压 Oracle Instant Client 19 到 /opt/oracle
+#    无需预先准备本地 zip；可用 --build-arg INSTANTCLIENT_URL=<镜像地址> 指定其他下载源
 # ---------------------------------------------------------------------------
-COPY docker/${INSTANTCLIENT_ZIP} /tmp/instantclient.zip
 RUN mkdir -p /opt/oracle \
+    && python -c "import urllib.request; urllib.request.urlretrieve('${INSTANTCLIENT_URL}', '/tmp/instantclient.zip')" \
     && python -c "import zipfile; zipfile.ZipFile('/tmp/instantclient.zip').extractall('/opt/oracle')" \
     && rm -f /tmp/instantclient.zip \
     && test -d "/opt/oracle/${INSTANTCLIENT_DIR}" \
-    && ln -s "/opt/oracle/${INSTANTCLIENT_DIR}/libclntsh.so.19.1" "/opt/oracle/${INSTANTCLIENT_DIR}/libclntsh.so" \
-    && ln -s "/opt/oracle/${INSTANTCLIENT_DIR}/libocci.so.19.1" "/opt/oracle/${INSTANTCLIENT_DIR}/libocci.so"
+    && ln -sf "/opt/oracle/${INSTANTCLIENT_DIR}/libclntsh.so.19.1" "/opt/oracle/${INSTANTCLIENT_DIR}/libclntsh.so" \
+    && ln -sf "/opt/oracle/${INSTANTCLIENT_DIR}/libocci.so.19.1" "/opt/oracle/${INSTANTCLIENT_DIR}/libocci.so"
 
 # ---------------------------------------------------------------------------
 # 3. Instant Client 相关环境变量（${INSTANTCLIENT_DIR} 在构建期由 ARG 替换）

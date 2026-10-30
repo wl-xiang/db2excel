@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # =============================================================================
 # oracle2excel 一键构建脚本
-#   1. 确认 Oracle Instant Client 19 zip 存在（没有则自动从 Oracle 官网下载）
-#   2. docker build 构建镜像
+#   1. docker build 构建镜像（Dockerfile 构建阶段在线下载 Oracle Instant Client 19）
+#   2. 验证镜像内 Thick 模式能否加载 libclntsh
 #   3. docker save | gzip 打包为 TGZ 到 dist/ 目录，并输出 sha256
 #
 # 用法:
 #   ./build.sh              # 默认版本 1.0.0
 #   ./build.sh 1.2.0        # 指定版本号
-#   SKIP_DOWNLOAD=1 ./build.sh   # 跳过下载检查（离线环境，zip 已就位时）
+#   INSTANTCLIENT_URL=<下载地址> ./build.sh   # 指定 Instant Client 下载源（可选）
 #
 # 导入镜像（在部署机上）:
 #   docker load -i dist/oracle2excel_<版本>_linux_amd64.tar.gz
@@ -18,9 +18,6 @@ set -euo pipefail
 VERSION="${1:-1.0.0}"
 IMAGE_NAME="oracle2excel"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IC_DIR="${PROJECT_DIR}/docker"
-IC_FILE="instantclient-basic-linux.x64-19.25.0.0.0dbru.zip"
-IC_URL="https://download.oracle.com/otn_software/linux/instantclient/1925000/${IC_FILE}"
 DIST_DIR="${PROJECT_DIR}/dist"
 
 log() { echo -e "\033[1;34m[build]\033[0m $*"; }
@@ -32,39 +29,21 @@ die() { echo -e "\033[1;31m[build] 错误:\033[0m $*" >&2; exit 1; }
 command -v docker >/dev/null 2>&1 || die "未检测到 docker，请先安装 Docker Engine"
 docker info >/dev/null 2>&1 || die "docker daemon 不可用（服务未启动或无权限）"
 
-mkdir -p "${IC_DIR}" "${DIST_DIR}"
+mkdir -p "${DIST_DIR}"
 
 # ---------------------------------------------------------------------------
-# 1. Oracle Instant Client 19
+# 1. 构建镜像（Instant Client 在 Dockerfile 构建阶段在线下载）
 # ---------------------------------------------------------------------------
-if [[ ! -f "${IC_DIR}/${IC_FILE}" ]]; then
-    if [[ "${SKIP_DOWNLOAD:-0}" == "1" ]]; then
-        die "SKIP_DOWNLOAD=1 但 ${IC_DIR}/${IC_FILE} 不存在"
-    fi
-    log "未找到 Instant Client zip，开始下载（约 75MB，国内网络可能较慢）..."
-    curl -fL --retry 3 --retry-delay 3 -o "${IC_DIR}/${IC_FILE}" "${IC_URL}" \
-        || die "下载失败: ${IC_URL}（可手动下载后放到 docker/${IC_FILE}）"
-else
-    log "已存在 Instant Client zip: ${IC_DIR}/${IC_FILE}"
+BUILD_ARGS=()
+if [[ -n "${INSTANTCLIENT_URL:-}" ]]; then
+    BUILD_ARGS+=(--build-arg "INSTANTCLIENT_URL=${INSTANTCLIENT_URL}")
 fi
 
-# 校验 zip 完整性
-python3 - "${IC_DIR}/${IC_FILE}" <<'PYEOF' || die "Instant Client zip 损坏，请删除后重新下载"
-import sys, zipfile
-zf = zipfile.ZipFile(sys.argv[1])
-bad = zf.testzip()
-sys.exit(1 if bad else 0)
-PYEOF
-log "Instant Client zip 校验通过"
-
-# ---------------------------------------------------------------------------
-# 2. 构建镜像
-# ---------------------------------------------------------------------------
 log "开始构建镜像 ${IMAGE_NAME}:${VERSION} ..."
-docker build -t "${IMAGE_NAME}:${VERSION}" -f "${PROJECT_DIR}/Dockerfile" "${PROJECT_DIR}"
+docker build "${BUILD_ARGS[@]}" -t "${IMAGE_NAME}:${VERSION}" -f "${PROJECT_DIR}/Dockerfile" "${PROJECT_DIR}"
 
 # ---------------------------------------------------------------------------
-# 3. 验证镜像内 Instant Client 与驱动（Thick 模式能否真正加载 libclntsh）
+# 2. 验证镜像内 Instant Client 与驱动（Thick 模式能否真正加载 libclntsh）
 # ---------------------------------------------------------------------------
 log "验证镜像..."
 docker run --rm -i --entrypoint python "${IMAGE_NAME}:${VERSION}" - <<'PYEOF'
@@ -77,7 +56,7 @@ PYEOF
 log "镜像内 Thick 模式验证通过"
 
 # ---------------------------------------------------------------------------
-# 4. 导出 TGZ
+# 3. 导出 TGZ
 # ---------------------------------------------------------------------------
 TGZ="${DIST_DIR}/${IMAGE_NAME}_${VERSION}_linux_amd64.tar.gz"
 log "导出镜像到 ${TGZ} ..."
