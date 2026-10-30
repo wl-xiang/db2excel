@@ -1,0 +1,24 @@
+services:
+  oracle2excel:
+    image: oracle2excel:1.0.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oracle2excel
+    hostname: oracle2excel
+    volumes:
+      # 配置文件: 修改后直接 docker compose restart 生效
+      - ./config:/app/config:ro
+      # 导出目录: 生成的 xlsx 落在宿主机 ./output
+      - ./output:/app/output
+    environment:
+      TZ: Asia/Shanghai
+      LOG_LEVEL: INFO
+      # CONFIG_PATH 默认即 /app/config/oracle_conn.json，可按需覆盖
+      # CONFIG_PATH: /app/config/oracle_conn.json
+    restart: "no"   # once 模式跑完即退出; 若 run_mode=loop 建议改为 unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"

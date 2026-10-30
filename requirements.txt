@@ -1,0 +1,2 @@
+python-oracledb==2.4.3
+openpyxl==3.1.5

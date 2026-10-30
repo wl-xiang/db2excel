@@ -1,0 +1,14 @@
+# 构建上下文瘦身：以下内容不进入镜像
+.git
+.gitignore
+.venv
+.workbuddy
+__pycache__
+*.pyc
+output/*
+dist/*
+tests/*
+README.md
+docker-compose.yml
+build.sh
+config/oracle_conn.json

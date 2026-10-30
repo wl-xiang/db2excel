@@ -1,0 +1,32 @@
+{
+  "oracle": {
+    "user": "your_user",
+    "password": "your_password",
+    "host": "192.168.1.100",
+    "port": 1521,
+    "service_name": "orcl",
+    "driver_mode": "thick",
+    "connect_retry_attempts": 3,
+    "connect_retry_delay_seconds": 5.0,
+    "fetch_arraysize": 5000
+  },
+  "run_mode": "once",
+  "loop_interval_seconds": 3600,
+  "output_dir": "/app/output",
+  "batch_size": 5000,
+  "log_every_rows": 10000,
+  "tables": ["T_ORDER", "T_USER_INFO"],
+  "queries": [
+    {
+      "name": "order_daily",
+      "sql": "SELECT ORDER_ID, CUSTOMER_NAME, AMOUNT, CREATED_AT FROM T_ORDER WHERE CREATED_AT >= TRUNC(SYSDATE) - 1"
+    }
+  ],
+  "export_all_user_tables": false,
+  "excel": {
+    "max_rows_per_sheet": 1000000,
+    "date_format": "%Y-%m-%d %H:%M:%S",
+    "cell_max_chars": 32767,
+    "blob_max_chars": 4096
+  }
+}
